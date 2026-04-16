@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Controller
 public class ImageController {
@@ -64,6 +63,7 @@ public class ImageController {
     public String directGallery() {
         return "direct-gallery";
     }
+   
 
     // 处理文件夹选择
     @PostMapping("/select-folder")
@@ -99,59 +99,45 @@ public class ImageController {
         List<String> images = new ArrayList<>();
         
         try {
-            // 从会话获取用户选择的文件夹路径
             String selectedFolder = (String) session.getAttribute("selectedFolder");
-            System.out.println("=== selectedFolder: " + selectedFolder);
-            
             if (selectedFolder == null) {
-                System.out.println("=== 未选择文件夹，使用默认目录 ===");
                 selectedFolder = imageDirectory;
             }
             
-            System.out.println("=== 使用的文件夹路径: " + selectedFolder);
             File folder = new File(selectedFolder);
-            
-            // 添加当前文件夹路径到模型
             model.addAttribute("currentFolder", selectedFolder);
             
-            // 检查文件夹是否存在
             if (folder.exists() && folder.isDirectory()) {
-                // 获取文件夹中的图片文件
-                System.out.println("=== 开始查找图片文件 ===");
                 File[] files = folder.listFiles();
-                
                 if (files != null) {
-                    int maxImages = 50; // 设置最大图片数量限制，允许展示更多图片
+                    // 提高限制，Coverflow 处理 200 张左右依然很流畅
+                    int maxImages = 300; 
                     int imageCount = 0;
                     
                     for (File file : files) {
                         if (file.isFile() && isImageFile(file.getName())) {
-                            // 超过最大图片数量限制时停止读取
-                            if (imageCount >= maxImages) {
-                                break;
-                            }
+                            if (imageCount >= maxImages) break;
                             images.add(file.getName());
                             imageCount++;
                         }
                     }
-                    System.out.println("=== 找到 " + images.size() + " 张图片 ===");
-                } else {
-                    System.out.println("=== 无法读取文件夹内容 ===");
                 }
-            } else {
-                System.out.println("=== 文件夹不存在或不是目录 ===");
             }
         } catch (Exception e) {
-            System.out.println("=== 发生异常: " + e.getMessage());
             e.printStackTrace();
         }
         
-        // 添加数据到模型
         model.addAttribute("images", images);
         
-        System.out.println("=== 返回gallery视图 ===");
-        return "gallery";
-    }
+        // 智能切换逻辑
+        if (images.size() > 10) {
+            // 图片多时：使用高级 Coverflow 封面流
+            return "gallery_coverflow"; 
+        } else {
+            // 图片少时：保持原有的 3D 轮盘 (gallery.html)
+            return "gallery"; 
+        }
+    }    
 
     // 处理图片上传
     @PostMapping("/upload")

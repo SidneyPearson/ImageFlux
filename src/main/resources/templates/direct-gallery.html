@@ -1,643 +1,448 @@
 <!DOCTYPE html>
-<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片预览系统 - 直接预览</title>
+    <title>沉浸式折叠画廊</title>
     <style>
-        /* 全局样式 */
         body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            transition: background-image 0.5s ease;
-            overflow: hidden;
+            margin: 0; padding: 0; background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden; height: 100vh; user-select: none;
         }
-        /* 模糊背景层 */
-        #backgroundBlur {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            filter: blur(20px);
-            z-index: -1;
-            transition: background-image 0.5s ease;
-        }
-        /* 3D 轮盘容器 */
-        .carousel-container {
-            perspective: 1200px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        /* 图片列表样式 - 3D 轮盘式排列 */
-        ul {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-            width: 200px;
-            height: 200px;
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.5s ease;
-        }
-        /* 基础li样式 - 3D位置将通过JavaScript动态设置 */
-        li {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            margin: 0;
-            opacity: 0.7;
-            transition: opacity 0.5s ease, transform 0.5s ease;
-        }
-        /* 缩略图样式 */
-        li img {
-            width: 250px;
-            height: 250px;
-            object-fit: cover;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-        }
-        li img:hover {
+
+        /* 背景 */
+        #bg-blur {
+            position: fixed; inset: 0; z-index: -1;
+            background-size: cover; background-position: center;
+            filter: blur(60px) brightness(0.2); 
+            transition: background-image 0.6s ease;
             transform: scale(1.1);
         }
-        /* 放大预览容器 - 全屏显示 */
-        #imagePreview {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            overflow: hidden;
-            opacity: 0;
-            /* 初始状态：从当前位置缩小 */
-            transform: scale(0.9);
-            /* 平缓的过渡效果 */
-            transition: opacity 0.5s ease, transform 0.5s ease;
-            pointer-events: none;
+
+        /* 顶部栏 */
+        .header {
+            position: absolute; top: 0; width: 100%; height: 50px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            z-index: 500; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 30px; box-sizing: border-box; transition: opacity 0.5s;
         }
-        /* 显示预览容器的类 */
-        #imagePreview.show {
-            opacity: 1;
-            /* 结束状态：全屏显示 */
-            transform: scale(1);
-            pointer-events: auto;
+        
+        .header-title { color: rgba(255,255,255,0.6); font-size: 13px; letter-spacing: 1px; }
+        
+        .controls button {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+            color: #bbb; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+            margin-left: 10px; font-size: 12px; backdrop-filter: blur(10px);
+            transition: all 0.2s;
         }
-        #imagePreview img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+        .controls button:hover { background: rgba(255,255,255,0.25); color: #fff; }
+        .controls button.active { background: #4CAF50; border-color: #4CAF50; color: #fff; }
+
+        /* === 3D 舞台 === */
+        .stage {
+            position: absolute; inset: 0;
+            /* 调整透视，增强近大远小的沉浸感 */
+            perspective: 1200px; 
+            display: flex; align-items: center; justify-content: center;
         }
-        /* 关闭按钮样式 */
-        .close-btn {
+
+        .pool-container {
+            position: relative; width: 0; height: 0;
+            transform-style: preserve-3d;
+        }
+
+        /* === 卡片样式 (加大尺寸) === */
+        .card {
             position: absolute;
-            top: 15px;
-            right: 25px;
-            color: white;
-            font-size: 32px;
-            font-weight: bold;
+            /* 尺寸加大 */
+            width: 460px; height: 345px; 
+            top: -172px; left: -230px; /* 居中 */
+            
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            will-change: transform;
             cursor: pointer;
-            z-index: 1001;
-            opacity: 0.8;
-            transition: opacity 0.3s ease;
+            /* 倒影 */
+            -webkit-box-reflect: below 2px linear-gradient(transparent, transparent 60%, rgba(0,0,0,0.2));
+            transition: opacity 0.3s;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
         }
-        .close-btn:hover {
-            opacity: 1;
+
+        .card img {
+            width: 100%; height: 100%; object-fit: cover;
+            border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        /* 控制按钮 */
-        .controls {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 100;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
+        .card img.loaded { opacity: 1; }
+
+        .card.active img { 
+            border-color: rgba(255,255,255,0.9); 
+            filter: brightness(1.15); 
+            box-shadow: 0 0 30px rgba(255,255,255,0.25);
         }
-        .control-btn {
-            background-color: rgba(255, 255, 255, 0.15);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 12px 24px;
-            border-radius: 8px;
+
+        /* === 影院全屏层 === */
+        .cinema-screen {
+            position: fixed; inset: 0; z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+            perspective: 1000px;
+            
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            background: rgba(0,0,0,0.95); 
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-            backdrop-filter: blur(15px);
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-        .control-btn:hover {
-            background-color: rgba(255, 255, 255, 0.25);
-            border-color: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        
+        .cinema-screen.active { opacity: 1; visibility: visible; }
+
+        .cinema-img {
+            width: 95vw; height: 95vh;
+            max-width: 100%; max-height: 100%;
+            object-fit: contain; 
+            
+            transform: scale(0.95); opacity: 0;
+            transition: transform 0.25s ease-out, opacity 0.25s;
+            cursor: default; 
         }
-        /* 当前文件夹信息 */
-        .folder-info {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.2);
-            padding: 15px 20px;
-            border-radius: 8px;
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 14px;
-            max-width: 400px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+        .cinema-img.show { opacity: 1; transform: scale(1); }
+
+        /* 关闭按钮 */
+        .close-btn {
+            position: absolute; top: 30px; right: 30px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+            color: white; font-size: 28px; font-weight: 300; line-height: 40px;
+            text-align: center; cursor: pointer; z-index: 1002;
+            transition: all 0.2s;
         }
-        .folder-info span {
-            font-family: monospace;
-            font-weight: 500;
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 3px 8px;
-            border-radius: 4px;
-            margin-left: 8px;
+        .close-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+
+        /* 底部信息 */
+        .info-bar {
+            position: absolute; bottom: 30px; width: 100%; text-align: center;
+            z-index: 500; transition: opacity 0.5s; pointer-events: none;
         }
-        /* 更换文件夹链接 */
-        .change-folder {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            background-color: rgba(76, 175, 80, 0.8);
-            padding: 12px 24px;
-            border-radius: 8px;
-            backdrop-filter: blur(15px);
-            text-decoration: none;
-            font-size: 16px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        .file-name {
+            color: #eee; font-size: 18px; font-weight: 300; margin-bottom: 10px;
+            text-shadow: 0 2px 4px #000; font-family: monospace; opacity: 0.9;
         }
-        .change-folder:hover {
-            background-color: rgba(76, 175, 80, 1);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        .progress-bar {
+            width: 30%; height: 3px; background: rgba(255,255,255,0.2); 
+            margin: 0 auto; border-radius: 2px; overflow: hidden;
         }
+        .progress-fill {
+            height: 100%; background: #fff; width: 0%; transition: width 0.1s;
+        }
+
+        body.auto-playing .header, 
+        body.auto-playing .info-bar { opacity: 0; }
+        body.auto-playing .stage { opacity: 0.3; transition: opacity 0.8s; } 
+
     </style>
 </head>
 <body>
-    <!-- 模糊背景层 -->
-    <div id="backgroundBlur"></div>
-    
-    <!-- 当前文件夹信息 -->
-    <div class="folder-info">
-        <span>当前文件夹：</span>
-        <span id="currentFolderName"></span>
-    </div>
-    
-    <!-- 控制按钮 -->
-    <div class="controls">
-        <button id="prevBtn" class="control-btn">上一张</button>
-        <button id="nextBtn" class="control-btn">下一张</button>
-        <button id="autoBtn" class="control-btn">自动轮播</button>
-        <form action="/logout" method="post" style="display: inline;">
-            <button type="submit" class="control-btn">登出</button>
-        </form>
-    </div>
-    
-    <div id="noImages">
-        <div class="folder-info" style="top: 70px;">图片目录中没有图片</div>
-    </div>
-    
-    <div id="hasImages" style="display: none;">
-        <!-- 3D 轮盘容器 -->
-        <div class="carousel-container">
-            <ul id="carousel">
-                <!-- 图片将通过JavaScript动态添加 -->
-            </ul>
-        </div>
-    </div>
-    
-    <!-- 更换文件夹链接 -->
-    <a href="/direct-select-folder" class="change-folder">更换文件夹</a>
-    
-    <!-- 放大预览容器 -->
-        <div id="imagePreview">
-            <div id="closePreview" class="close-btn">×</div>
-            <img id="previewImage" src="" alt="预览图片">
-        </div>
-    
-    <script>
-        // 初始化页面
-        function initPage() {
-            // 从sessionStorage获取图片数据
-            const imagesData = sessionStorage.getItem('directSelectedImages');
-            const folderName = sessionStorage.getItem('selectedFolderName');
-            
-            // 检查是否有图片数据，如果没有，重定向到选择页面
-            if (!imagesData) {
-                window.location.href = '/direct-select-folder';
-                return;
-            }
-            
-            const images = JSON.parse(imagesData);
-            
-            // 设置当前文件夹名称
-            document.getElementById('currentFolderName').textContent = folderName;
-            
-            // 检查是否有图片
-            if (images.length === 0) {
-                document.getElementById('noImages').style.display = 'block';
-                document.getElementById('hasImages').style.display = 'none';
-                return;
-            }
-            
-            document.getElementById('noImages').style.display = 'none';
-            document.getElementById('hasImages').style.display = 'block';
-            
-            // 动态添加图片到轮盘
-            const carousel = document.getElementById('carousel');
-            carousel.innerHTML = '';
-            
-            images.forEach((image, index) => {
-                const li = document.createElement('li');
-                const img = document.createElement('img');
-                img.src = image.url;
-                img.alt = image.name;
-                
-                // 添加图片加载错误处理
-                img.onerror = function() {
-                    // 图片加载失败时，显示错误信息或重定向到选择页面
-                    console.error('图片加载失败:', image.name, image.url);
-                    // 可以选择显示错误信息，或者直接重定向到选择页面
-                    // 这里选择重定向到选择页面，让用户重新选择文件夹
-                    window.location.href = '/direct-select-folder';
-                };
-                
-                li.appendChild(img);
-                carousel.appendChild(li);
-            });
-            
-            // 初始化轮播功能
-            initCarousel();
-        }
-        
-        // 初始化轮播功能
-        function initCarousel() {
-            // 获取DOM元素
-            const carousel = document.getElementById('carousel');
-            const items = document.querySelectorAll('li');
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            const autoBtn = document.getElementById('autoBtn');
-            const backgroundBlur = document.getElementById('backgroundBlur');
-            
 
+<div id="bg-blur"></div>
+
+<div class="header">
+    <div class="header-title">
+        <span id="folderInfo">Loading...</span>
+    </div>
+    <div class="controls">
+        <button id="btnPlay" onclick="toggleAutoPlay()">▶ 自动轮播</button>
+        <button onclick="location.href='/direct-select-folder'">📂 换文件夹</button>
+        <form action="/logout" method="post" style="display:inline"><button style="color:#ff8888; border-color:rgba(255,100,100,0.15)">✕</button></form>
+    </div>
+</div>
+
+<div class="stage" id="stage">
+    <div class="pool-container" id="pool"></div>
+</div>
+
+<div id="cinemaScreen" class="cinema-screen" onclick="closeCinema()">
+    <div class="close-btn" onclick="closeCinema()">×</div>
+    <img id="cinemaImg" class="cinema-img" src="" draggable="false" onclick="event.stopPropagation()">
+</div>
+
+<div class="info-bar" id="infoBar">
+    <div class="file-name" id="fileName"></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<script>
+    // === 核心参数调整 ===
+    const VISIBLE_COUNT = 16; 
+    
+    // === Coverflow 沉浸参数 ===
+    const SPACING = 280;   // 间距加大 (减少遮挡)
+    const DEPTH = 200;     // 深度适中
+    const ANGLE = 30;      // 角度减小 (从55->30，展开更多内容)
+    const Z_OFFSET = -100; // 拉近整体距离 (原来是-300，现在-100离得更近)
+    
+    // === 状态 ===
+    let images = [];
+    let total = 0;
+    let currIndex = 0;   
+    let targetIndex = 0;
+    let domPool = [];    
+    
+    let isAutoPlay = false;
+    let isCinemaOpen = false;
+    let playTimer = null;
+    let cinemaTimer = null;
+    let isDragging = false;
+    let startX = 0;
+
+    window.onload = function() {
+        const data = sessionStorage.getItem('directSelectedImages');
+        const fname = sessionStorage.getItem('selectedFolderName');
+        if(!data) return location.href = '/direct-select-folder';
+        
+        images = JSON.parse(data);
+        total = images.length;
+        document.getElementById('folderInfo').innerText = `${fname} (${total})`;
+
+        createDomPool();
+        requestAnimationFrame(renderLoop);
+        bindEvents();
+        updateBg(0);
+    };
+
+    function createDomPool() {
+        const container = document.getElementById('pool');
+        container.innerHTML = '';
+        domPool = [];
+
+        for(let i = 0; i < VISIBLE_COUNT; i++) {
+            const div = document.createElement('div');
+            div.className = 'card';
+            const img = document.createElement('img');
+            div.appendChild(img);
             
-            // 轮播参数
-            let currentIndex = 0;
-            let totalItems = items.length;
-            let autoPlay = false;
-            let autoPlayInterval = null;
-            let currentAngle = 0; // 跟踪当前的旋转角度
-            const defaultAutoPlaySpeed = 1000; // 默认自动轮播速度（毫秒）
-            let autoPlaySpeed = defaultAutoPlaySpeed; // 当前自动轮播速度
-            let lastScrollTime = 0; // 记录上次滚动时间，用于计算滚动速度
-            let scrollSpeed = 0; // 记录滚动速度
-            let speedRecoveryTimer = null; // 用于恢复默认速度的定时器
-            const speedRecoveryDelay = 1000; // 滚动停止后开始恢复速度的延迟时间（毫秒）
-            const speedRecoveryStep = 100; // 每次恢复的速度步长（毫秒）
+            div.onclick = (e) => {
+                e.stopPropagation(); 
+                const realIdx = parseInt(div.dataset.realIndex);
+                if(isNaN(realIdx)) return;
+                
+                // 1. 同步背景轮播到这张图
+                targetIndex = realIdx;
+                stopAutoPlay();
+                
+                // 2. 直接放大 (不等待移动完成)
+                openCinema(realIdx);
+            };
+            container.appendChild(div);
+            domPool.push({ el: div, img: img, currentSrc: null });
+        }
+    }
+
+    function renderLoop() {
+        const diff = targetIndex - currIndex;
+        if(Math.abs(diff) > 0.001) currIndex += diff * 0.12; 
+        else currIndex = targetIndex;
+
+        const roundedIndex = Math.round(currIndex);
+
+        domPool.forEach((item, poolIndex) => {
+            let offset = (poolIndex - (roundedIndex % VISIBLE_COUNT));
+            if (offset < -Math.floor(VISIBLE_COUNT/2)) offset += VISIBLE_COUNT;
+            if (offset > Math.floor(VISIBLE_COUNT/2)) offset -= VISIBLE_COUNT;
             
-            // 为每个li元素设置初始3D位置
-        items.forEach((item, index) => {
-            // 计算每个项目在轮播圆环上的位置角度
-            const angle = (360 / totalItems) * index;
+            const realIndex = roundedIndex + offset;
+            const dataIndex = getSafeIndex(realIndex);
             
-            // 设置3D位置和旋转，使图片排列成圆环
-            item.style.transform = `translate(-50%, -50%) rotateY(${angle}deg) translateZ(300px)`;
-            
-            // 设置第一个元素为当前显示元素
-            if (index === 0) {
-                item.style.opacity = 1;
-                item.style.zIndex = 10;
+            item.el.style.display = 'block';
+            item.el.dataset.realIndex = realIndex;
+
+            if (Math.abs(offset) < 8) { 
+                const imgUrl = images[dataIndex].url;
+                if(item.currentSrc !== imgUrl) {
+                    item.img.src = imgUrl;
+                    item.currentSrc = imgUrl;
+                    item.img.onload = () => item.img.classList.add('loaded');
+                    item.img.classList.remove('loaded');
+                }
+            }
+
+            // === 3D 折叠算法 ===
+            const dist = realIndex - currIndex;
+            const absDist = Math.abs(dist);
+            const sign = dist > 0 ? 1 : -1;
+
+            // 视野控制：只显示 8 张左右 (4 on each side)
+            if (absDist > 4.2) {
+                item.el.style.opacity = 0;
+                item.el.style.pointerEvents = 'none';
             } else {
-                item.style.opacity = 0.7;
-                item.style.zIndex = 1;
+                item.el.style.opacity = 1;
+                item.el.style.pointerEvents = 'auto';
             }
+
+            // 计算变换
+            let x = dist * SPACING;
+            let z = Z_OFFSET - (absDist * DEPTH);
+            let rY = 0;
+
+            // 两侧折叠
+            if (absDist >= 0.5) {
+                x += sign * 80; // 稍微推开
+                rY = -sign * ANGLE; // 向内折叠
+            }
+
+            item.el.style.transform = `translateX(${x}px) translateZ(${z}px) rotateY(${rY}deg)`;
+            item.el.style.zIndex = 1000 - Math.round(absDist);
+
+            if(absDist < 0.5) item.el.classList.add('active');
+            else item.el.classList.remove('active');
         });
+
+        updateUI(roundedIndex);
+        requestAnimationFrame(renderLoop);
+    }
+
+    function getSafeIndex(idx) {
+        let safeIdx = Math.round(idx) % total;
+        if(safeIdx < 0) safeIdx += total;
+        return safeIdx;
+    }
+
+    function updateUI(idx) {
+        const safeIdx = getSafeIndex(idx);
+        document.getElementById('fileName').innerText = images[safeIdx].name;
+        document.getElementById('progressFill').style.width = ((safeIdx / (total-1)) * 100) + '%';
         
-        // 设置当前图片作为背景
-        function setCurrentImageBackground() {
-            if (totalItems > 0) {
-                const currentImage = items[currentIndex].querySelector('img');
-                backgroundBlur.style.backgroundImage = `url('${currentImage.src}')`;
-            }
-        }
-        
-        // 更新轮播状态
-        function updateCarousel() {
-            // 确保当前角度是图片间隔的整数倍
-            const step = (360 / totalItems);
-            
-            // 调整轮播方向，确保图片向上轮播
-            carousel.style.transform = `rotateY(${currentAngle}deg)`;
-            
-            // 直接使用当前角度计算索引，不进行归一化，确保与实际显示一致
-            let calculatedIndex = Math.round(currentAngle / step) % totalItems;
-            if (calculatedIndex < 0) {
-                calculatedIndex += totalItems;
-            }
-            currentIndex = calculatedIndex;
-            
-            // 更新图片透明度和层级
-            items.forEach((item, index) => {
-                if (index === currentIndex) {
-                    item.style.opacity = 1;
-                    item.style.zIndex = 10;
-                } else {
-                    item.style.opacity = 0.7;
-                    item.style.zIndex = 1;
-                }
-            });
-            
-            // 设置当前图片作为背景
-            setCurrentImageBackground();
-        }
-            
-            // 下一张图片
-            function nextSlide() {
-                // 调整方向，确保图片向上轮播
-                currentAngle -= (360 / totalItems);
-                updateCarousel();
-            }
-            
-            // 上一张图片
-            function prevSlide() {
-                // 调整方向，确保图片向上轮播
-                currentAngle += (360 / totalItems);
-                updateCarousel();
-            }
-            
-            // 自动轮播
-            function toggleAutoPlay() {
-                autoPlay = !autoPlay;
-                if (autoPlay) {
-                    autoBtn.textContent = '停止轮播';
-                    autoPlayInterval = setInterval(nextSlide, autoPlaySpeed); // 使用动态速度
-                } else {
-                    autoBtn.textContent = '自动轮播';
-                    clearInterval(autoPlayInterval);
-                }
-            }
-            
-            // 更新自动轮播速度
-            function updateAutoPlaySpeed(newSpeed) {
-                // 限制速度范围，防止过快或过慢
-                const minSpeed = 300; // 最小速度（毫秒）
-                const maxSpeed = 3000; // 最大速度（毫秒）
-                autoPlaySpeed = Math.max(minSpeed, Math.min(maxSpeed, newSpeed));
-                
-                // 如果当前正在自动轮播，重新启动以应用新速度
-                if (autoPlay) {
-                    toggleAutoPlay(); // 先停止
-                    toggleAutoPlay(); // 再启动
-                }
-            }
-            
-            // 开始恢复默认速度的定时器
-            function startSpeedRecovery() {
-                // 清除之前的定时器
-                if (speedRecoveryTimer) {
-                    clearTimeout(speedRecoveryTimer);
-                    speedRecoveryTimer = null;
-                }
-                
-                // 设置新的定时器，延迟后开始恢复速度
-                speedRecoveryTimer = setTimeout(() => {
-                    // 逐渐恢复到默认速度
-                    function recoverSpeed() {
-                        if (autoPlaySpeed > defaultAutoPlaySpeed) {
-                            // 如果当前速度比默认速度快，逐渐减慢
-                            autoPlaySpeed = Math.max(defaultAutoPlaySpeed, autoPlaySpeed - speedRecoveryStep);
-                            
-                            // 如果当前正在自动轮播，重新启动以应用新速度
-                            if (autoPlay) {
-                                toggleAutoPlay(); // 先停止
-                                toggleAutoPlay(); // 再启动
-                            }
-                            
-                            // 继续恢复
-                            speedRecoveryTimer = setTimeout(recoverSpeed, 100);
-                        } else if (autoPlaySpeed < defaultAutoPlaySpeed) {
-                            // 如果当前速度比默认速度慢，逐渐加快
-                            autoPlaySpeed = Math.min(defaultAutoPlaySpeed, autoPlaySpeed + speedRecoveryStep);
-                            
-                            // 如果当前正在自动轮播，重新启动以应用新速度
-                            if (autoPlay) {
-                                toggleAutoPlay(); // 先停止
-                                toggleAutoPlay(); // 再启动
-                            }
-                            
-                            // 继续恢复
-                            speedRecoveryTimer = setTimeout(recoverSpeed, 100);
-                        } else {
-                            // 已恢复到默认速度，清除定时器
-                            clearTimeout(speedRecoveryTimer);
-                            speedRecoveryTimer = null;
-                        }
-                    }
-                    
-                    recoverSpeed();
-                }, speedRecoveryDelay);
-            }
-            
-            // 初始化
-            if (totalItems > 0) {
-                updateCarousel();
-                // 默认开启自动轮播
-                toggleAutoPlay();
-            }
-            
-            // 事件监听
-            nextBtn.addEventListener('click', nextSlide);
-            prevBtn.addEventListener('click', prevSlide);
-            autoBtn.addEventListener('click', toggleAutoPlay);
-            
-            // 点击图片容器切换到该图片（仅当没有点击到图片本身时）
-            items.forEach((item, index) => {
-                item.addEventListener('click', () => {
-                    // 直接更新当前索引
-                    currentIndex = index;
-                    updateCarousel();
-                });
-            });
-            
-            // 鼠标悬停图片时，将该图片设置为背景预览并停止自动轮播
-            items.forEach((item, index) => {
-                const img = item.querySelector('img');
-                let originalBackground = '';
-                let wasAutoPlaying = false;
-                
-                // 鼠标进入时：停止自动轮播并设置为当前图片预览
-                img.addEventListener('mouseenter', () => {
-                    // 保存自动轮播状态并停止
-                    wasAutoPlaying = autoPlay;
-                    if (autoPlay) {
-                        toggleAutoPlay(); // 停止自动轮播
-                    }
-                    
-                    // 保存原始背景并切换到当前图片
-                    originalBackground = backgroundBlur.style.backgroundImage;
-                    backgroundBlur.style.backgroundImage = `url('${img.src}')`;
-                });
-                
-                // 鼠标离开时：恢复自动轮播状态和原来的背景
-                img.addEventListener('mouseleave', () => {
-                    // 恢复原来的背景
-                    backgroundBlur.style.backgroundImage = originalBackground;
-                    
-                    // 如果之前是自动轮播状态，则恢复
-                    if (wasAutoPlaying && !autoPlay) {
-                        toggleAutoPlay(); // 恢复自动轮播
-                    }
-                });
-            });
-            
-            // 点击图片放大预览功能
-            const imagePreview = document.getElementById('imagePreview');
-            const previewImage = document.getElementById('previewImage');
-            
-            // 为每个图片添加点击放大事件
-            items.forEach((item) => {
-                const img = item.querySelector('img');
-                
-                img.addEventListener('click', (e) => {
-                    // 阻止事件冒泡，避免触发轮盘切换
-                    e.stopPropagation();
-                    
-                    // 设置预览图片的源
-                    previewImage.src = img.src;
-                    previewImage.alt = img.alt;
-                    
-                    // 显示放大预览容器（添加show类实现平滑过渡）
-                    imagePreview.classList.add('show');
-                });
-            });
-            
-            // 点击放大预览容器外部关闭预览
-            imagePreview.addEventListener('click', () => {
-                imagePreview.classList.remove('show');
-            });
-            
-            // 点击放大预览图片本身不关闭（可选，提升用户体验）
-            previewImage.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-            
-            // 点击关闭按钮关闭预览
-            const closePreview = document.getElementById('closePreview');
-            closePreview.addEventListener('click', () => {
-                imagePreview.classList.remove('show');
-            });
-            
-            // 按ESC键关闭放大预览
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && imagePreview.classList.contains('show')) {
-                imagePreview.classList.remove('show');
-            }
-        });
-        
-        // 鼠标拖拽效果
-        let isDragging = false;
-        let startX = 0;
-        let startAngle = 0;
-        
-        // 鼠标按下时开始拖拽
-        carousel.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            startX = e.clientX;
-            startAngle = currentAngle;
-            
-            // 停止自动轮播
-            if (autoPlay) {
-                toggleAutoPlay();
-            }
-        });
-        
-        // 鼠标移动时更新拖拽
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            
-            const currentX = e.clientX;
-            const deltaX = currentX - startX;
-            
-            // 调整滚动方向：鼠标向右拖动，显示下一张
-            const sensitivity = 0.6;
-            currentAngle = startAngle + deltaX * sensitivity;
-            updateCarousel();
-        });
-        
-        // 鼠标释放时结束拖拽
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-        
-        // 鼠标离开窗口时结束拖拽
-        document.addEventListener('mouseleave', () => {
-            isDragging = false;
-        });
-        
-        // 添加鼠标滚轮支持（包括Mac双指滑动）
-        carousel.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            
-            // 停止自动轮播
-            if (autoPlay) {
-                toggleAutoPlay();
-            }
-            
-            // 调整滚轮灵敏度，根据滑动速度动态调整
-            const baseSensitivity = 1.5;
-            
-            // 计算总滚动距离
-            const rawDistance = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-            const scrollDistance = -rawDistance;
-            
-            // 更新当前角度
-            currentAngle += scrollDistance * baseSensitivity;
-            updateCarousel();
-            
-            // 计算滚动速度，并更新自动轮播速度
-            const currentTime = Date.now();
-            const timeDiff = currentTime - lastScrollTime;
-            
-            if (timeDiff > 0 && timeDiff < 1000) {
-                scrollSpeed = Math.abs(rawDistance) / timeDiff;
-                const newSpeed = Math.max(300, 2000 - (scrollSpeed * 500));
-                updateAutoPlaySpeed(newSpeed);
-            }
-            
-            lastScrollTime = currentTime;
-            startSpeedRecovery();
-        });
+        if(!isAutoPlay && !isCinemaOpen) updateBg(safeIdx);
     }
     
-    // 页面加载完成后初始化
-    window.addEventListener('DOMContentLoaded', initPage);
-    </script>
+    let bgTimer;
+    function updateBg(idx) {
+        const safeIdx = getSafeIndex(idx);
+        if(bgTimer) clearTimeout(bgTimer);
+        bgTimer = setTimeout(() => {
+            const bg = document.getElementById('bg-blur');
+            if(images[safeIdx]) bg.style.backgroundImage = `url('${images[safeIdx].url}')`;
+        }, 300);
+    }
+
+    // === 全屏预览 ===
+    function openCinema(idx) {
+        isCinemaOpen = true;
+        const screen = document.getElementById('cinemaScreen');
+        const img = document.getElementById('cinemaImg');
+        const safeIdx = getSafeIndex(idx);
+        
+        img.src = images[safeIdx].url;
+        screen.classList.add('active');
+        
+        setTimeout(() => img.classList.add('show'), 10);
+    }
+
+    function closeCinema() {
+        if (!isCinemaOpen) return;
+        isCinemaOpen = false;
+        
+        const screen = document.getElementById('cinemaScreen');
+        const img = document.getElementById('cinemaImg');
+
+        img.classList.remove('show');
+        screen.classList.remove('active');
+        
+        stopAutoPlay();
+    }
+    
+    // === 自动轮播 (方向反转：向右) ===
+    function toggleAutoPlay() { if(isAutoPlay) stopAutoPlay(); else startAutoPlay(); }
+
+    function startAutoPlay() {
+        isAutoPlay = true;
+        document.body.classList.add('auto-playing');
+        document.getElementById('btnPlay').innerText = "⏸ 停止";
+        document.getElementById('btnPlay').classList.add('active');
+        runAutoStep();
+    }
+
+    function stopAutoPlay() {
+        isAutoPlay = false;
+        document.body.classList.remove('auto-playing');
+        document.getElementById('btnPlay').innerText = "▶ 自动轮播";
+        document.getElementById('btnPlay').classList.remove('active');
+        
+        if(playTimer) clearTimeout(playTimer);
+        if(cinemaTimer) clearTimeout(cinemaTimer);
+        
+        document.getElementById('cinemaImg').classList.remove('show');
+        document.getElementById('cinemaScreen').classList.remove('active');
+    }
+
+    function runAutoStep() {
+        if(!isAutoPlay) return;
+
+        // 1. 关闭大图
+        document.getElementById('cinemaImg').classList.remove('show');
+        document.getElementById('cinemaScreen').classList.remove('active');
+
+        // 2. 移动到下一张 (反转为 ++)
+        targetIndex++; 
+        updateBg(targetIndex);
+
+        // 3. 等待移动
+        playTimer = setTimeout(() => {
+            if(!isAutoPlay) return;
+            openCinema(targetIndex);
+            
+            // 4. 欣赏
+            cinemaTimer = setTimeout(() => {
+                if(!isAutoPlay) return;
+                document.getElementById('cinemaImg').classList.remove('show');
+                
+                setTimeout(() => {
+                    if(isAutoPlay) {
+                        document.getElementById('cinemaScreen').classList.remove('active');
+                        runAutoStep();
+                    }
+                }, 300);
+
+            }, 2000); 
+
+        }, 600);
+    }
+
+    // === 事件 ===
+    function bindEvents() {
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+                stopAutoPlay(); targetIndex++; if(isCinemaOpen) openCinema(targetIndex);
+            }
+            if(e.key === 'ArrowLeft') {
+                stopAutoPlay(); targetIndex--; if(isCinemaOpen) openCinema(targetIndex);
+            }
+            if(e.key === 'Escape') closeCinema();
+        });
+
+        window.addEventListener('wheel', (e) => {
+            if(isCinemaOpen) return; 
+            e.preventDefault();
+            stopAutoPlay();
+            let delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+            // 方向修正：滚轮向下/向右 -> 下一张 (targetIndex++)
+            targetIndex += delta * 0.02; 
+        }, {passive: false});
+
+        const stage = document.getElementById('stage');
+        stage.addEventListener('mousedown', e => { 
+            if(isCinemaOpen) return; 
+            isDragging=true; startX=e.pageX; stopAutoPlay(); 
+        });
+        window.addEventListener('mousemove', e => {
+            if(!isDragging || isCinemaOpen) return;
+            // 拖拽修正：鼠标往左拖 -> 画面往左走 -> 看右边的图 -> targetIndex++
+            targetIndex += (startX - e.pageX) * 0.005; 
+            startX = e.pageX;
+        });
+        window.addEventListener('mouseup', () => { isDragging=false; targetIndex=Math.round(targetIndex); });
+    }
+</script>
 </body>
 </html>

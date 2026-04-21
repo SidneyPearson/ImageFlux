@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片预览系统</title>
+    <title>图片预览系统 - 3D轮盘</title>
     <script src="/js/performance-monitor.js"></script>
     <script src="/js/image-optimizer.js"></script>
 
@@ -33,10 +33,27 @@
             background: var(--bg);
             color: var(--text-primary);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 9999;
             font-size: 16px;
+            gap: 16px;
+        }
+
+        #loader .progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #loader .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            width: 0%;
+            transition: width 0.3s ease;
         }
 
         #bg {
@@ -47,6 +64,7 @@
             filter: blur(40px) brightness(.4);
             transform: scale(1.1);
             z-index: -1;
+            will-change: background-image;
         }
 
         .ui-panel {
@@ -141,29 +159,7 @@
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
         }
 
-        .add-image-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: linear-gradient(135deg, var(--success), #2ea352);
-            color: #000;
-            padding: 12px 24px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            z-index: 1000;
-            transition: all 200ms ease-out;
-            box-shadow: 0 4px 15px rgba(52, 199, 89, 0.4);
-            border: none;
-            cursor: pointer;
-            min-height: 40px;
-        }
-
-        .add-image-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.5);
-        }
+        
 
         #stage {
             position: fixed;
@@ -172,11 +168,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            contain: layout style paint;
         }
 
         #world {
             position: relative;
             transform-style: preserve-3d;
+            will-change: transform;
         }
 
         .item {
@@ -188,15 +186,52 @@
             margin: -170px;
             transform-style: preserve-3d;
             will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .item .img-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,.6);
         }
 
         .item img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 14px;
-            box-shadow: 0 20px 50px rgba(0,0,0,.6);
             pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .item img.loaded {
+            opacity: 1;
+        }
+
+        .item .placeholder {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .item .placeholder::after {
+            content: '';
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         #meta {
@@ -253,30 +288,48 @@
             border-color: rgba(255,255,255,0.6);
             transform: scale(1.05);
         }
+
+        .low-memory-warning {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(255, 149, 0, 0.15);
+            border: 1px solid rgba(255, 149, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #FF9500;
+            font-size: 12px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .low-memory-warning.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 
 <body>
 
-<div id="loader">Loading…</div>
+<div id="loader">
+    <span>Loading...</span>
+    <div class="progress-bar"><div class="progress-fill" id="loadProgress"></div></div>
+</div>
 <div id="bg"></div>
 
 <div class="ui-panel">
-    📁 <span th:text="${currentFolder}"></span>
-    <span th:text="${images.size()}"></span>
+    📁 本地图片
+    <span id="imageCount">0</span>
 </div>
 
 <div class="controls">
     <button id="btnAuto" class="btn active" onclick="toggleAuto()">停止播放</button>
     <button id="btnPreview" class="btn btn-secondary" onclick="togglePreview()">播放预览</button>
-    <button class="btn btn-secondary" th:if="${hasSelectedFolder}" onclick="location.href='/exit-to-home'">退出</button>
-    <form th:if="${!hasSelectedFolder}" action="/logout" method="post"><button class="btn btn-danger">退出</button></form>
+    <button class="btn btn-danger" onclick="location.href='/exit-to-home'">退出</button>
 </div>
 
 <a href="/direct-select-folder" class="change-folder">选择文件夹</a>
-
-<input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
-<button class="add-image-btn" onclick="document.getElementById('fileInput').click()">📷 添加图片</button>
 
 <div id="stage">
     <div id="world"></div>
@@ -289,15 +342,9 @@
     <img id="cinemaImg" class="cinema-img" src="" draggable="false">
 </div>
 
-<script th:inline="javascript">
-    const serverImages = [[${images}]];
-    let images = serverImages.map(name => ({
-        name: name,
-        url: '/images/' + encodeURIComponent(name),
-        loaded: false,
-        preloaded: false
-    }));
-    let total = images.length;
+<script>
+    let images = [];
+    let total = 0;
     const world = document.getElementById('world');
 
     let currentPos = 0;
@@ -306,6 +353,9 @@
     let isDragging = false;
     let isAuto = true;
     let isPreview = false;
+    let isCinemaOpen = false;
+    let playTimer = null;
+    let cinemaTimer = null;
 
     let isPausing = false;
     let pauseTimer = 0;
@@ -317,88 +367,131 @@
 
     const VISIBLE_THRESHOLD = 4;
     const PRELOAD_AHEAD = 2;
-
+    
     let imageOptimizer;
     let performanceMonitor;
+    let performanceOverlay;
     let initialized = false;
-    let isCinemaOpen = false;
-    let playTimer = null;
-    let cinemaTimer = null;
 
     async function init() {
         imageOptimizer = new ImageOptimizer();
         performanceMonitor = new PerformanceMonitor();
+        performanceOverlay = new PerformanceOverlay(performanceMonitor);
+
+        const directData = sessionStorage.getItem('directSelectedImages');
+        
+        if (directData) {
+            images = JSON.parse(directData).map(img => ({
+                name: img.name,
+                url: img.url,
+                loaded: false,
+                compressedUrl: null,
+                preloaded: false
+            }));
+            sessionStorage.removeItem('directSelectedImages');
+            sessionStorage.removeItem('selectedFolderName');
+        } else {
+            location.href = '/gallery';
+            return;
+        }
+
+        total = images.length;
+        document.getElementById('imageCount').innerText = total;
 
         await preloadInitialImages();
         initScene();
-
+        
         performanceMonitor.start();
         window.addEventListener('keydown', handleKeydown);
     }
 
     async function preloadInitialImages() {
+        const loadProgress = document.getElementById('loadProgress');
         const urls = images.slice(0, VISIBLE_THRESHOLD + PRELOAD_AHEAD).map(img => img.url);
+        
         await imageOptimizer.preloadImages(urls, {
-            maxCount: VISIBLE_THRESHOLD + PRELOAD_AHEAD
+            maxCount: VISIBLE_THRESHOLD + PRELOAD_AHEAD,
+            onProgress: (progress) => {
+                loadProgress.style.width = `${progress * 100}%`;
+            }
         });
     }
 
-    window.onload = () => {
-        init();
-    };
-
     function initScene() {
-        images.forEach((imgData, i) => {
-            const item = document.createElement('div');
-            item.className = 'item';
-            item.dataset.index = i;
-            item.style.cursor = 'pointer';
-            item.onclick = function(e) {
-                e.stopPropagation();
-                openCinema(i);
-            };
-            item.onmousedown = function(e) {
-                e.stopPropagation();
-            };
-
-            const img = new Image();
-            img.onload = () => {
-                images[i].loaded = true;
-            };
-            img.src = imgData.url;
-            item.appendChild(img);
-            world.appendChild(item);
-        });
-
         const perimeter = total * (ITEM_WIDTH + GAP);
         radius = Math.max(400, perimeter / (2 * Math.PI));
 
-        document.getElementById('loader').remove();
+        for (let i = 0; i < total; i++) {
+            const item = createItem(i);
+            world.appendChild(item);
+        }
+
+        document.getElementById('loader').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('loader').remove();
+        }, 300);
+        
         updateBg(0);
         requestAnimationFrame(animate);
         initialized = true;
     }
 
+    function createItem(index) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.dataset.index = index;
+        item.style.cursor = 'pointer';
+        item.onclick = function() {
+            openCinema(index);
+        };
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'img-wrapper';
+        
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        wrapper.appendChild(placeholder);
+        
+        const img = document.createElement('img');
+        img.dataset.originalUrl = images[index].url;
+        wrapper.appendChild(img);
+        
+        item.appendChild(wrapper);
+        return item;
+    }
+
     function loadImageForIndex(index) {
         if (images[index].loaded) return;
-
+        
         const item = world.children[index];
         if (!item) return;
-
+        
         const img = item.querySelector('img');
-        if (img) {
-            const imgObj = new Image();
-            imgObj.onload = () => {
-                img.src = images[index].url;
-                images[index].loaded = true;
-            };
-            imgObj.src = images[index].url;
-        }
+        const placeholder = item.querySelector('.placeholder');
+        
+        const imgObj = new Image();
+        imgObj.onload = () => {
+            img.src = images[index].url;
+            img.classList.add('loaded');
+            images[index].loaded = true;
+            
+            if (placeholder) {
+                placeholder.remove();
+            }
+        };
+        
+        imgObj.onerror = () => {
+            if (placeholder) {
+                placeholder.remove();
+            }
+        };
+        
+        imgObj.src = images[index].url;
     }
 
     function updateVisibleImages() {
         const centerIndex = Math.round(currentPos);
-
+        
         for (let i = -VISIBLE_THRESHOLD; i <= VISIBLE_THRESHOLD; i++) {
             const idx = ((centerIndex + i) % total + total) % total;
             loadImageForIndex(idx);
@@ -660,65 +753,15 @@
 
     function updateBg(i) {
         const idx = ((i % total) + total) % total;
-        document.getElementById('bg').style.backgroundImage = `url('${images[idx].url}')`;
+        if (images[idx] && images[idx].url) {
+            document.getElementById('bg').style.backgroundImage = `url('${images[idx].url}')`;
+        }
     }
 
     function updateMeta() {
         const idx = ((Math.round(currentPos) % total) + total) % total;
-        document.getElementById('meta').innerText = images[idx].name;
+        document.getElementById('meta').innerText = images[idx] ? images[idx].name : '';
         updateBg(idx);
-    }
-
-    function handleFileSelect(event) {
-        const files = event.target.files;
-        if (!files || files.length === 0) {
-            return;
-        }
-
-        const file = files[0];
-        if (!file.type.startsWith('image/')) {
-            alert('请选择有效的图片文件');
-            event.target.value = '';
-            return;
-        }
-
-        const imgUrl = URL.createObjectURL(file);
-
-        if (total + 1 > 8) {
-            images.push({
-                name: file.name,
-                url: imgUrl,
-                loaded: false
-            });
-
-            sessionStorage.setItem('directSelectedImages', JSON.stringify(images));
-            sessionStorage.setItem('selectedFolderName', '本地图片');
-            window.location.href = '/direct-gallery';
-            return;
-        }
-
-        const item = document.createElement('div');
-        item.className = 'item';
-        const img = new Image();
-        img.src = imgUrl;
-        img.onload = function() {
-            item.appendChild(img);
-            world.appendChild(item);
-
-            images.push({
-                name: file.name,
-                url: imgUrl,
-                loaded: true
-            });
-            total = images.length;
-
-            const perimeter = total * (ITEM_WIDTH + GAP);
-            radius = Math.max(400, perimeter / (2 * Math.PI));
-
-            renderRing();
-        };
-
-        event.target.value = '';
     }
 
     let cinemaScale = 1;
@@ -845,14 +888,17 @@
         screen.classList.remove('active');
     }
 
+    function togglePerformanceMonitor() {
+        if (!performanceOverlay.container) {
+            performanceOverlay.init();
+        } else {
+            performanceOverlay.toggle();
+        }
+    }
+
     function handleKeydown(e) {
         if (e.key === 'p' || e.key === 'P') {
-            if (!window.perfOverlay) {
-                window.perfOverlay = new PerformanceOverlay(performanceMonitor);
-                window.perfOverlay.init();
-            } else {
-                window.perfOverlay.toggle();
-            }
+            togglePerformanceMonitor();
         }
         if (e.key === 'Escape') {
             closeCinema();
@@ -867,6 +913,8 @@
             imageOptimizer.clearCache();
         }
     });
+
+    window.onload = init;
 </script>
 
 </body>

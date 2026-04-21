@@ -20,7 +20,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .authorizeRequests()
-                .antMatchers("/login", "/select-folder", "/gallery", "/images/**", "/css/**", "/test", "/direct-select-folder", "/direct-gallery", "/sounds/**").permitAll()  // 允许访问登录页面、文件夹选择页面、gallery页面、图片资源、测试页面和静态资源
+                .antMatchers("/login", "/gallery", "/images/**", "/css/**", "/test", "/direct-select-folder", "/direct-gallery", "/immersive-gallery", "/exit-to-home", "/sounds/**", "/gallery-from-files", "/handle-folder-selection").permitAll()  // 允许访问登录页面、文件夹选择页面、gallery页面、图片资源、测试页面和静态资源
                 .anyRequest().authenticated()  // 其他所有请求需要认证
                 .and()
             .formLogin()

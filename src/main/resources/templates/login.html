@@ -8,9 +8,14 @@
     <style>
         :root {
             --primary: #667eea;
+            --primary-dark: #5a6fd8;
             --secondary: #764ba2;
             --accent: #24c6dc;
-            --danger: #ff4b5c;
+            --danger: #FF453A;
+            --bg: #0a0a0f;
+            --surface: #151520;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
         }
         /* 全局样式重置 */
         * {
@@ -288,17 +293,24 @@
             letter-spacing: 0.5px;
         }
         
+        /* 输入框容器 */
+        .input-container {
+            position: relative;
+        }
+        
         /* 输入框样式 - 从用户体验角度优化，确保高对比度 */
-        .form-group input[type="password"] {
+        .form-group input[type="password"],
+        .form-group input[type="text"] {
             width: 100%;
-            padding: 28px 32px; /* 增大内边距 */
+            padding: 28px 80px 28px 32px; /* 增大右内边距，给小眼睛留出空间 */
             border: none;
             border-radius: 20px; /* 增大圆角 */
             background: radial-gradient(circle at 0 0, rgba(102,126,234,0.22), transparent 55%),
                         radial-gradient(circle at 100% 100%, rgba(36,198,220,0.22), transparent 55%),
                         rgba(25, 27, 59, 0.95); /* 深色背景，与深色登录框协调 */
             color: white; /* 白色文字，确保在深色背景上清晰可见 */
-            font-size: 32px; /* 增大字体大小，使密码圆点更清晰 */
+            font-size: 48px; /* 增大字体大小，使密码圆点更清晰 */
+            letter-spacing: 8px; /* 增加字符间距，让圆点更分散 */
             backdrop-filter: blur(10px);
             border: 2px solid rgba(102, 126, 234, 0.65); /* 明显的边框颜色 */
             transition: all 0.3s ease;
@@ -306,7 +318,8 @@
         }
         
         /* 输入框焦点样式 */
-        .form-group input[type="password"]:focus {
+        .form-group input[type="password"]:focus,
+        .form-group input[type="text"]:focus {
             outline: none;
             background: radial-gradient(circle at 0 0, rgba(102,126,234,0.32), transparent 60%),
                         radial-gradient(circle at 100% 100%, rgba(36,198,220,0.32), transparent 60%),
@@ -315,49 +328,78 @@
             box-shadow: 0 0 20px rgba(102, 126, 234, 0.5); /* 焦点发光效果 */
         }
         
+        /* 小眼睛图标按钮 */
+        .toggle-password {
+            position: absolute;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 36px;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 8px;
+            z-index: 10;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toggle-password:hover {
+            color: white;
+        }
+        
         /* 输入框占位符样式 - 确保清晰可见 */
-        .form-group input[type="password"]::placeholder {
+        .form-group input[type="password"]::placeholder,
+        .form-group input[type="text"]::placeholder {
             color: rgba(255, 255, 255, 0.7); /* 半透明白色，与深色背景形成良好对比度 */
-            font-size: 20px; /* 增大占位符字体大小 */
+            font-size: 36px; /* 增大占位符字体大小 */
+            letter-spacing: 2px; /* 增加字符间距 */
+            padding-left: 4px; /* 增加左边间距 */
         }
         
         /* 错误信息样式 - 确保在深色背景上清晰可见 */
         .error-message {
-            background: radial-gradient(circle at 0 0, rgba(255,140,140,0.8), transparent 65%),
-                        rgba(255, 80, 80, 0.9);
-            color: white;
-            padding: 22px; /* 增大内边距 */
-            border-radius: 16px; /* 增大圆角 */
-            margin-bottom: 40px; /* 增大底部间距 */
+            background: radial-gradient(circle at 0 0, rgba(255, 69, 58, 0.25), transparent 65%),
+                        rgba(255, 69, 58, 0.15);
+            color: var(--danger);
+            padding: 22px;
+            border-radius: 16px;
+            margin-bottom: 40px;
             text-align: center;
-            border: 1px solid rgba(255, 80, 80, 1);
+            border: 1px solid rgba(255, 69, 58, 0.5);
             backdrop-filter: blur(10px);
             font-weight: 500;
-            font-size: 20px; /* 增大字体大小 */
+            font-size: 16px;
         }
         
-        /* 登录按钮样式 - 更大尺寸 */
+        /* 登录按钮样式 */
         .login-btn {
             width: 100%;
-            padding: 28px;
+            padding: 20px 32px;
             border: none;
-            border-radius: 20px; /* 增大圆角 */
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            font-size: 28px; /* 增大按钮字体 */
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--text-primary);
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
+            transition: all 200ms ease-out;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            min-height: 48px;
         }
         
         /* 登录按钮悬停效果 */
         .login-btn:hover {
-            background: linear-gradient(135deg, #5a6fd8, #6a408e);
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
             transform: translateY(-2px);
-            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
         }
         
         /* 登录按钮点击效果 */
@@ -472,8 +514,10 @@
                 <!-- CSRF保护已禁用，不需要CSRF令牌 -->
                 
                 <div class="form-group">
-                    <label for="password">请输入密码</label>
-                    <input type="password" id="password" name="password" maxlength="12" required placeholder="请输入密码">
+                    <div class="input-container">
+                        <input type="password" id="password" name="password" maxlength="12" required placeholder="请输入密码">
+                        <button type="button" class="toggle-password" onclick="togglePassword()">👁</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <input type="hidden" name="username" value="admin"> <!-- Spring Security需要username字段 -->
@@ -487,6 +531,20 @@
     </div>
     
     <script>
+        // 切换密码显示/隐藏
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleBtn = document.querySelector('.toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleBtn.textContent = '🙈';
+            } else {
+                passwordInput.type = 'password';
+                toggleBtn.textContent = '👁';
+            }
+        }
+        
         // 生成动态粒子
         function createParticles() {
             const particlesContainer = document.getElementById('particles');

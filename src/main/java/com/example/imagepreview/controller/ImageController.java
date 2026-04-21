@@ -46,39 +46,92 @@ public class ImageController {
         return "test";
     }
 
-    // 文件夹选择页面
-    @GetMapping("/select-folder")
-    public String selectFolder() {
-        return "folder-selection";
-    }
-    
-    // 直接选择文件夹页面（使用File System Access API）
+    // 选择文件夹页面（使用File System Access API）
     @GetMapping("/direct-select-folder")
     public String directSelectFolder() {
         return "direct-folder-selection";
     }
     
-    // 直接预览页面（显示通过File System Access API选择的图片）
+    // 直接预览页面（显示通过File System Access API选择的图片）- 已迁移到 immersive-gallery
     @GetMapping("/direct-gallery")
     public String directGallery() {
-        return "direct-gallery";
+        return "immersive-gallery";
     }
-   
-
-    // 处理文件夹选择
-    @PostMapping("/select-folder")
-    public String handleFolderSelection(@RequestParam String folderPath, HttpSession session, RedirectAttributes redirectAttributes) {
-        // 验证文件夹路径
+    
+    // 返回首页并清除文件夹选择
+    @GetMapping("/exit-to-home")
+    public String exitToHome(HttpSession session) {
+        session.removeAttribute("selectedFolder");
+        return "redirect:/gallery";
+    }
+    
+    // 从文件选择图片后的3D轮盘展示（≤8张图片）
+    @GetMapping("/gallery-from-files")
+    public String galleryFromFiles() {
+        return "gallery-from-files";
+    }
+    
+    // 处理选择文件夹后的跳转 - 根据图片数量决定展示方式
+    @GetMapping("/handle-folder-selection")
+    public String handleFolderSelection(@RequestParam String folderPath, HttpSession session) {
         File dir = new File(folderPath);
         if (dir.exists() && dir.isDirectory()) {
-            // 存储文件夹路径到会话
             session.setAttribute("selectedFolder", folderPath);
-            return "redirect:/gallery";
+            
+            int imageCount = 0;
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile() && isImageFile(file.getName())) {
+                        imageCount++;
+                    }
+                }
+            }
+            
+            if (imageCount <= 8) {
+                return "redirect:/gallery-from-files";
+            } else {
+                return "redirect:/immersive-gallery";
+            }
         } else {
-            // 文件夹无效，重定向回选择页面并显示错误
-            redirectAttributes.addAttribute("error", true);
-            return "redirect:/select-folder";
+            return "redirect:/direct-select-folder";
         }
+    }
+    
+    // 沉浸式画廊页面（Coverflow 封面流模式）
+    @GetMapping("/immersive-gallery")
+    public String immersiveGallery(Model model, HttpSession session) {
+        List<String> images = new ArrayList<>();
+        String selectedFolder = (String) session.getAttribute("selectedFolder");
+        if (selectedFolder == null) {
+            selectedFolder = imageDirectory;
+        }
+        
+        try {
+            File folder = new File(selectedFolder);
+            model.addAttribute("currentFolder", selectedFolder);
+            
+            if (folder.exists() && folder.isDirectory()) {
+                File[] files = folder.listFiles();
+                if (files != null) {
+                    int maxImages = 300;
+                    int imageCount = 0;
+                    
+                    for (File file : files) {
+                        if (file.isFile() && isImageFile(file.getName())) {
+                            if (imageCount >= maxImages) break;
+                            images.add(file.getName());
+                            imageCount++;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        model.addAttribute("images", images);
+        return "immersive-gallery";
     }
 
     // 图片画廊页面
@@ -100,17 +153,17 @@ public class ImageController {
         
         try {
             String selectedFolder = (String) session.getAttribute("selectedFolder");
+            boolean hasSelectedFolder = selectedFolder != null;
             if (selectedFolder == null) {
                 selectedFolder = imageDirectory;
             }
+            model.addAttribute("currentFolder", selectedFolder);
+            model.addAttribute("hasSelectedFolder", hasSelectedFolder);
             
             File folder = new File(selectedFolder);
-            model.addAttribute("currentFolder", selectedFolder);
-            
             if (folder.exists() && folder.isDirectory()) {
                 File[] files = folder.listFiles();
                 if (files != null) {
-                    // 提高限制，Coverflow 处理 200 张左右依然很流畅
                     int maxImages = 300; 
                     int imageCount = 0;
                     
@@ -129,14 +182,8 @@ public class ImageController {
         
         model.addAttribute("images", images);
         
-        // 智能切换逻辑
-        if (images.size() > 10) {
-            // 图片多时：使用高级 Coverflow 封面流
-            return "gallery_coverflow"; 
-        } else {
-            // 图片少时：保持原有的 3D 轮盘 (gallery.html)
-            return "gallery"; 
-        }
+        // 使用统一的 Coverflow 视图，与 direct-gallery.html 保持一致
+        return "gallery"; 
     }    
 
     // 处理图片上传
